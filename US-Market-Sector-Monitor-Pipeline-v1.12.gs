@@ -23,8 +23,6 @@ const CONFIG = {
   OPENROUTER_URL: 'https://openrouter.ai/api/v1/chat/completions',
 
   RECIPIENT_EMAILS: [
-    'steven88nzm@gmail.com',
-    'Stantototo@gmail.com'
   ],
 
   EXPECTED_ETF_COUNT: 11,
