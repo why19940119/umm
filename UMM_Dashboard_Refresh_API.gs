@@ -37,6 +37,15 @@ function refreshUmmDashboardData_() {
     }
 
     const publishRes = publishUmmSnapshotForDashboard();
+    if (!publishRes || publishRes.status !== 'SUCCESS') {
+      return {
+        status: 'FAILED_PUBLISH',
+        message: 'Drive/Cloudflare D1 publish 失敗。',
+        freshness: freshnessRes,
+        crossAsset: crossAssetRes,
+        publish: publishRes
+      };
+    }
 
     return {
       status: 'SUCCESS',

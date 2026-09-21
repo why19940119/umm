@@ -2,10 +2,13 @@
  * ============================================================================
  * UMM Dashboard Snapshot Builder, Drive Publisher, and Cloudflare D1 Notifier
  * ============================================================================
+ * Sole implementation of publishUmmSnapshotForDashboard / buildUmmDashboardSnapshot_.
+ * Do not redefine these in UMM_Dashboard_Publisher.gs (legacy Pipedream path removed).
  */
 const UMM_FOLDER_ID = '1rkF6g7-qP2rIEP21F_P6lsM-4KCBUu7t';
 const SNAPSHOT_FILE_NAME = 'umm_snapshot.json';
 const CLOUDFLARE_SNAPSHOT_URL = 'https://umm-dashboard.65ng8nnrjp.workers.dev/api/snapshot';
+const UMM_REFRESH_SECRET_PROPERTY = 'UMM_REFRESH_SECRET';
 
 function buildUmmDashboardSnapshot_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -57,9 +60,14 @@ function buildUmmDashboardSnapshot_() {
       mappingStatus: r[10]
     }));
 
+  const generatedAtHkt = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
+  // Unique D1 row per publish so dashboard-only refresh (same Daily_Snapshot id) still inserts/updates visibly.
+  const publishId = 'PUB_' + generatedAtHkt.replace(/[-:\s]/g, '');
+
   return {
     source: 'umm',
-    generatedAtHkt: Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss'),
+    generatedAtHkt: generatedAtHkt,
+    publishId: publishId,
     latestSnapshot: id ? {
       snapshotId: id,
       timestampHkt: rows[0][1],
@@ -87,9 +95,14 @@ function previewUmmDashboardSnapshot() {
 
 function notifyCloudflareD1UmmDashboard_(snapshot) {
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    const secret = PropertiesService.getScriptProperties().getProperty(UMM_REFRESH_SECRET_PROPERTY);
+    if (secret) {
+      headers['X-UMM-Publish-Secret'] = secret;
+    }
     const response = UrlFetchApp.fetch(CLOUDFLARE_SNAPSHOT_URL, {
       method: 'post',
-      contentType: 'application/json',
+      headers: headers,
       payload: JSON.stringify(snapshot),
       muteHttpExceptions: true
     });
@@ -104,6 +117,11 @@ function notifyCloudflareD1UmmDashboard_(snapshot) {
   }
 }
 
+/**
+ * Publish current dashboard payload to Drive + Cloudflare D1.
+ * Returns status SUCCESS only when Cloudflare D1 write succeeds.
+ * Pipedream is no longer part of this path (legacy webhook returned 400 and never updated D1).
+ */
 function publishUmmSnapshotForDashboard() {
   const snapshot = buildUmmDashboardSnapshot_();
   const folder = DriveApp.getFolderById(UMM_FOLDER_ID);
@@ -118,13 +136,16 @@ function publishUmmSnapshotForDashboard() {
     file = folder.createFile(blob);
   }
   const cloudflare = notifyCloudflareD1UmmDashboard_(snapshot);
+  const ok = cloudflare && cloudflare.status === 'SUCCESS';
   const result = {
-    status: 'SUCCESS',
+    status: ok ? 'SUCCESS' : 'FAILED_CLOUDFLARE',
     fileName: file.getName(),
     fileId: file.getId(),
     fileUrl: file.getUrl(),
     folderUrl: folder.getUrl(),
     snapshotId: snapshot.latestSnapshot ? snapshot.latestSnapshot.snapshotId : null,
+    publishId: snapshot.publishId,
+    generatedAtHkt: snapshot.generatedAtHkt,
     cloudflare: cloudflare
   };
   Logger.log(JSON.stringify(result, null, 2));
