@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-21 (WP-UMM-3)
+
+### False-signal guards (data freshness + session)
+
+- Mark cross-asset rows `NON_TRADING` / `STALE` when quote as-of ≠ expected US session; clear day-change % so frozen VIX/SOX prints cannot emit scary moves.
+- Add `UMM_SymbolKeys.gs` for canonical Instrument ID / symbol joins (`VIX`, `SOX`, …).
+- Publish payload includes `dataStatus`, `reportAsOfHkt`, and null `%` for non-SUCCESS rows.
+- Cloudflare D1 publish path unchanged (no Pipedream).
+
 ## 2026-09-03
 
 ### Security and repository hygiene
