@@ -4,11 +4,18 @@
  * ============================================================================
  * Sole implementation of publishUmmSnapshotForDashboard / buildUmmDashboardSnapshot_.
  * Do not redefine these in UMM_Dashboard_Publisher.gs (legacy Pipedream path removed).
+ * WP-UMM-3: pass through NON_TRADING / STALE flags; never publish scary % for those rows.
  */
 const UMM_FOLDER_ID = '1rkF6g7-qP2rIEP21F_P6lsM-4KCBUu7t';
 const SNAPSHOT_FILE_NAME = 'umm_snapshot.json';
 const CLOUDFLARE_SNAPSHOT_URL = 'https://umm-dashboard.65ng8nnrjp.workers.dev/api/snapshot';
 const UMM_REFRESH_SECRET_PROPERTY = 'UMM_REFRESH_SECRET';
+
+const UMM_XA_PUBLISHABLE_STATUSES = {
+  SUCCESS: true,
+  STALE: true,
+  NON_TRADING: true
+};
 
 function buildUmmDashboardSnapshot_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -21,7 +28,7 @@ function buildUmmDashboardSnapshot_() {
   const sectors = getRows('US_11_Sectors')
     .filter(r => allowed.includes(String(r[1]).trim().toUpperCase()))
     .map(r => ({
-      ticker: r[1],
+      ticker: resolveUmmCanonicalSymbol_(r[1]),
       name: r[2],
       lastPrice: r[3],
       dayChangePct: r[4],
@@ -48,26 +55,55 @@ function buildUmmDashboardSnapshot_() {
     .find(r => r[5] === id && (r[4] === 'SUCCESS' || r[4] === 'MANUAL_SUCCESS')) || [];
 
   const xa = getRows('CrossAsset_Snapshot');
-  const xaId = [...xa].reverse().find(r => r[0] && r[3] === 'SUCCESS')?.[0] || '';
-  const crossAssets = xa.filter(r => r[0] === xaId && r[3] === 'SUCCESS')
-    .map(r => ({
-      instrumentId: r[4],
+  let xaId = '';
+  for (let i = xa.length - 1; i >= 0; i--) {
+    const status = String(xa[i][3] || '');
+    if (xa[i][0] && UMM_XA_PUBLISHABLE_STATUSES[status]) {
+      xaId = xa[i][0];
+      break;
+    }
+  }
+  const xaRows = xa.filter(r => r[0] === xaId && UMM_XA_PUBLISHABLE_STATUSES[String(r[3] || '')]);
+  const crossAssets = xaRows.map(r => {
+    const dataStatus = String(r[3] || '');
+    const instrumentId = resolveUmmInstrumentId_(r[4], r[6]) || String(r[4] || '').trim();
+    const canonicalSymbol = String(r[11] || '').trim() || resolveUmmCanonicalSymbol_(instrumentId);
+    const emitPct = dataStatus === 'SUCCESS';
+    const rawPct = r[8];
+    const dayChangePct = emitPct && !(rawPct === '' || rawPct === null) ? rawPct : null;
+    return {
+      instrumentId: instrumentId,
       displayName: r[5],
-      symbol: r[6],
+      symbol: canonicalSymbol || r[6] || '',
+      canonicalSymbol: canonicalSymbol,
       lastPrice: r[7],
-      dayChangePct: r[8],
+      dayChangePct: dayChangePct,
       priceUnit: r[9],
-      mappingStatus: r[10]
-    }));
+      mappingStatus: r[10],
+      dataStatus: dataStatus,
+      asOfHkt: r[1] || '',
+      sourceTimestampHkt: r[12] || '',
+      quoteAsOfEt: r[13] || '',
+      dataAgeMinutes: r[14] === '' || r[14] === null || r[14] === undefined ? null : r[14]
+    };
+  });
 
   const generatedAtHkt = Utilities.formatDate(new Date(), 'Asia/Hong_Kong', 'yyyy-MM-dd HH:mm:ss');
-  // Unique D1 row per publish so dashboard-only refresh (same Daily_Snapshot id) still inserts/updates visibly.
   const publishId = 'PUB_' + generatedAtHkt.replace(/[-:\s]/g, '');
+
+  const xaAsOfCandidates = crossAssets
+    .map(x => x.sourceTimestampHkt || x.asOfHkt)
+    .filter(Boolean)
+    .sort()
+    .reverse();
+  const crossAssetAsOfHkt = xaAsOfCandidates.length ? xaAsOfCandidates[0] : '';
 
   return {
     source: 'umm',
     generatedAtHkt: generatedAtHkt,
     publishId: publishId,
+    reportAsOfHkt: crossAssetAsOfHkt || (rows[0] ? rows[0][1] : '') || generatedAtHkt,
+    crossAssetAsOfHkt: crossAssetAsOfHkt,
     latestSnapshot: id ? {
       snapshotId: id,
       timestampHkt: rows[0][1],
@@ -146,6 +182,7 @@ function publishUmmSnapshotForDashboard() {
     snapshotId: snapshot.latestSnapshot ? snapshot.latestSnapshot.snapshotId : null,
     publishId: snapshot.publishId,
     generatedAtHkt: snapshot.generatedAtHkt,
+    reportAsOfHkt: snapshot.reportAsOfHkt,
     cloudflare: cloudflare
   };
   Logger.log(JSON.stringify(result, null, 2));
