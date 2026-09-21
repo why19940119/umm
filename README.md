@@ -1,5 +1,9 @@
 # UMM — US Market Monitor
 
+> **Start here for product setup:** [PRODUCT.md](./PRODUCT.md) (zero → dashboard snapshot) · [ACCEPTANCE.md](./ACCEPTANCE.md) · [OPERATIONS.md](./OPERATIONS.md)
+>
+> Sister UI/API repo: [umm-dashboard](https://github.com/why19940119/umm-dashboard)
+
 Google Apps Script pipeline for monitoring the 11 major US market sectors and selected cross-asset instruments.
 
 ## Main entry points
