@@ -29,12 +29,16 @@
 
 ## Files
 
-- `UMM_SymbolKeys.gs` (new)
-- `CrossAsset_Monitor_Extension.gs`
-- `UMM_Publish_Snapshot.gs`
-- `docs/WP-UMM-3.md` (this file)
-- `ACCEPTANCE.md` (extended)
-- `umm-dashboard` `index.html` (optional companion PR): show `NON_TRADING` / `STALE` badges instead of a fake %
+- `UMM_SymbolKeys.gs` (new) — canonical Instrument ID / symbol joins
+- `UMM_XaSessionGuards.gs` (new) — `classifyXaQuoteSession_`, snapshot create, weekend/holiday guards
+- `UMM_XaYahooFreshness.gs` (new) — Yahoo fetch + clear % on STALE/NON_TRADING (includes `^VIX`)
+- `UMM_XaReports.gs` (new) — AI/email helpers (SUCCESS rows only)
+- `CrossAsset_Monitor_Extension.gs` — CONFIG + instrument registry
+- `UMM_Publish_Snapshot.gs` — pass-through flags; Cloudflare path intact
+- `docs/WP-UMM-3.md` (this file), `ACCEPTANCE.md`, `CHANGELOG.md`
+- Companion: [`umm-dashboard#3`](https://github.com/why19940119/umm-dashboard/pull/3) — UI badges for `NON_TRADING` / `STALE`
+
+After merge: copy **all** new/updated `.gs` files into the bound Apps Script project.
 
 ## Manual acceptance checklist
 
